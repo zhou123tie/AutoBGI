@@ -8,9 +8,9 @@
 
 双击桌面上的「原神一条龙助手」图标。
 
-  程序   C:\Users\豆饺\AppData\Local\AutoBGI\原神一条龙助手.exe
-  配置   C:\Users\豆饺\AppData\Local\AutoBGI\AutoBGISettings.ini
-  日志   C:\Users\豆饺\AppData\Local\AutoBGI\logs\autobgi.log
+  程序   %LOCALAPPDATA%\AutoBGI\原神一条龙助手.exe
+  配置   %LOCALAPPDATA%\AutoBGI\AutoBGISettings.ini
+  日志   %LOCALAPPDATA%\AutoBGI\logs\autobgi.log
 
 程序里「运行日志」页有「打开配置目录」「打开日志目录」按钮。
 
@@ -236,7 +236,7 @@
    不能写会在日志里红字警告。
 
 2. 双击没反应
-   看 C:\Users\豆饺\AppData\Local\AutoBGI\AutoBGI_crash.txt
+   看 %LOCALAPPDATA%\AutoBGI\AutoBGI_crash.txt
 
 3. 任务没跑 / 跑了但没启动游戏
    看 logs\autobgi.log 最后几行
@@ -246,7 +246,7 @@
    ok-ww 非管理员时**静默放弃**，日志里查不出原因 —— 这是最常见的真因。
    再看「鸣潮主程序」是不是红色 ✗，是就点「修正」；
    最后看 ok-ww 自己的输出：
-   C:\Users\豆饺\AppData\Local\AutoBGI\okww_last_run.log
+   %LOCALAPPDATA%\AutoBGI\okww_last_run.log
 
 5. 鸣潮跑到一半自己没了（日志里出现 exists:0）
    这不是 ok-ww 的问题 —— ok-ww 已经连上窗口、图像识别成功、
@@ -294,7 +294,7 @@
      先看「检测各程序」里「管理员权限」是不是 ✗ ——
      ok-ww 非管理员时会**静默放弃**，日志里查不出原因。
    · 想看 ok-ww 的原始输出：
-     C:\Users\豆饺\AppData\Local\AutoBGI\okww_last_run.log
+     %LOCALAPPDATA%\AutoBGI\okww_last_run.log
 
 8. 想确认系统里到底装了几个任务
    点「查看全部启动项」
