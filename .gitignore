@@ -23,6 +23,9 @@ selftest.txt
 gui_check.txt
 okww_last_run.log
 chain_report.txt
+*.ini
+_shots/
+*.zip
 
 # ---- 编辑器 / 系统 ----
 .vscode/
