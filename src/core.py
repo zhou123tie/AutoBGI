@@ -24,7 +24,7 @@ import time
 import uuid
 from datetime import datetime, timedelta
 
-APP_NAME = "原神一条龙助手"
+APP_NAME = "AutoDragon"
 APP_VERSION = "1.0.0"
 
 TASK_TRIGGER_NAME = "AutoBGI_Onedragon"

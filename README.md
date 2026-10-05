@@ -97,7 +97,7 @@
 有两种拿程序的方式：
 
 - **直接从仓库下载（推荐，免 Python 环境）**：打开
-  [`release/原神一条龙助手.exe`](release/原神一条龙助手.exe)，
+  [`release/AutoDragon.exe`](release/AutoDragon.exe)，
   点文件页右上角的 **Download** 即可。这是已经打包好的可执行文件。
 - **从 Releases 下载**：见仓库右侧的 Releases 页（维护者会把带说明的压缩包挂在那里）。
 

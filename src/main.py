@@ -153,7 +153,7 @@ def _toolbox_cmd(argv):
 
     if "--install" in argv:
         cfg = core.Config()
-        say("原神一条龙助手 —— 安装定时任务报告")
+        say("AutoDragon —— 安装定时任务报告")
         say("=" * 52)
         say("管理员权限 : %s" % core.is_admin())
         say("配置文件   : %s" % cfg.path)
@@ -293,7 +293,7 @@ def _toolbox_cmd(argv):
         # 手动接力：GUI 非管理员时会带着这个参数提权重启自己再执行。
         # 必须提权 —— ok-ww 启动 PC 版鸣潮强制要求管理员（见 core.run_okww）。
         cfg = core.Config()
-        say("原神一条龙助手 —— 手动接力鸣潮报告")
+        say("AutoDragon —— 手动接力鸣潮报告")
         say("=" * 52)
         say("管理员权限 : %s" % core.is_admin())
         say("ok-ww 目录 : %s" % (cfg.okww_dir or "(未找到)"))
@@ -342,7 +342,7 @@ def _crash_log(exc_text):
     就是这个问题：GUI 构造失败，进程却还活着，没有任何提示）。
     所以任何异常都必须落盘 + 弹窗。
     """
-    text = ("原神一条龙助手 —— 启动失败\n"
+    text = ("AutoDragon —— 启动失败\n"
             "时间: %s\n"
             "frozen: %s\n"
             "exe: %s\n"
@@ -386,7 +386,7 @@ def main():
                 rp = sys.argv[sys.argv.index("--report") + 1]
             except IndexError:
                 rp = None
-        txt = ("原神一条龙助手 —— 权限自检\n"
+        txt = ("AutoDragon —— 权限自检\n"
                "%s\n"
                "当前是否管理员          : %s\n"
                "已设置「始终管理员运行」: %s\n"

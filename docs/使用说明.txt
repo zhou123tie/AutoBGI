@@ -1,4 +1,4 @@
-原神一条龙助手（AutoBGIManager）
+﻿AutoDragon
 ==================================
 
 睡觉时到点自动唤醒电脑 → 跑原神一条龙 → 再接力跑鸣潮日常。
@@ -6,9 +6,9 @@
 
 【怎么打开】
 
-双击桌面上的「原神一条龙助手」图标。
+双击桌面上的「AutoDragon」图标。
 
-  程序   %LOCALAPPDATA%\AutoBGI\原神一条龙助手.exe
+  程序   %LOCALAPPDATA%\AutoBGI\AutoDragon.exe
   配置   %LOCALAPPDATA%\AutoBGI\AutoBGISettings.ini
   日志   %LOCALAPPDATA%\AutoBGI\logs\autobgi.log
 
