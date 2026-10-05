@@ -1,0 +1,32 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ---- PyInstaller ----
+build/
+dist/
+*.manifest
+
+# ---- 运行时产物（都含个人路径，绝不入库）----
+AutoBGISettings.ini
+AutoBGISettings.ini.bak
+logs/
+*.log
+AutoBGI_crash.txt
+*_report.txt
+selftest.txt
+gui_check.txt
+okww_last_run.log
+chain_report.txt
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
