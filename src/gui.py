@@ -1877,6 +1877,33 @@ class App(tk.Tk):
         self.stage_hint.grid(row=_rn + 1, column=0, sticky="w",
                              pady=(10, 0))
 
+        # ★ 多游戏接力：保留上一游戏 / 首游戏独占全屏
+        self.keep_prev_var = tk.BooleanVar(value=self.cfg.keep_prev_game)
+        SoftCheck(i1d, "接力时保留上一个游戏进程（不主动关闭）",
+                  self.keep_prev_var).grid(row=_rn + 2, column=0, sticky="w",
+                                          pady=(16, 0))
+        self.keep_prev_var.trace_add("write", lambda *a: self._sync_cfg())
+        tk.Label(i1d,
+                 text="开启后，每个阶段跑完不会杀掉上一个游戏的进程，"
+                      "多个游戏可同时挂在后台（适合想回来接着玩任意一个）。"
+                      "关掉则按原逻辑清掉上一游戏腾出显卡/内存。",
+                 bg=CARD, fg=TEXT_DIM, font=make_font(9),
+                 anchor="w", justify="left", wraplength=580).grid(
+                     row=_rn + 3, column=0, sticky="w", pady=(0, 12))
+
+        self.showfirst_var = tk.BooleanVar(value=self.cfg.show_first_game)
+        SoftCheck(i1d, "首个游戏窗口独占全屏（还原+最大化+置顶，清掉其它窗口）",
+                  self.showfirst_var).grid(row=_rn + 4, column=0, sticky="w",
+                                          pady=(4, 0))
+        self.showfirst_var.trace_add("write", lambda *a: self._sync_cfg())
+        tk.Label(i1d,
+                 text="开启后，第一个游戏启动时会把它（游戏窗口）"
+                      "还原并最大化、强制置顶，并清掉其它窗口，"
+                      "保证整屏都是这个游戏、上层不叠任何其它窗口。",
+                 bg=CARD, fg=TEXT_DIM, font=make_font(9),
+                 anchor="w", justify="left", wraplength=580).grid(
+                     row=_rn + 5, column=0, sticky="w", pady=(0, 12))
+
         # ---- 接力鸣潮 ----
         # before=c1b：把它提到「系统里到底装了什么」之前，
         # 这样它是第 2 张卡（不滚动也能看到大半），不会像以前那样
@@ -2388,6 +2415,10 @@ class App(tk.Tk):
                          "1" if self.float_var.get() else "0")
             self.cfg.set("OkwwGuiMode",
                          "1" if self.okgui_var.get() else "0")
+            self.cfg.set("KeepPrevGame",
+                         "1" if self.keep_prev_var.get() else "0")
+            self.cfg.set("ShowFirstGame",
+                         "1" if self.showfirst_var.get() else "0")
         except Exception:  # noqa: BLE001
             pass
         ok, msg = self.cfg.save()

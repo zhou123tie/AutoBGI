@@ -367,6 +367,16 @@ DEFAULTS = {
     "WuwaGapSec": "20",
     # ok-ww 跑日常最长等多久（分钟），仅用于记录结果
     "OkwwTimeoutMin": "120",
+    # 多游戏接力：上一阶段跑完后，是否「保留」它的游戏进程（不主动关闭）。
+    # 0 = 按原逻辑清掉上一游戏腾出显卡/内存（默认，资源最省）；
+    # 1 = 保留上一游戏继续在后台运行（多个游戏可同时挂着）。
+    # 注意：旧版只给 genshin→wuwa 提供了「KillGenshin」开关，这里把它
+    # 推广成「通用的不杀上一游戏」总开关，作用于整个 StageOrder 调度。
+    "KeepPrevGame": "0",
+    # 首个游戏启动后，是否把它（游戏窗口）「独占全屏」置顶显示：
+    # 还原被最小化的窗口 → 最大化占满屏幕 → 强制置前 → 清掉其它窗口，
+    # 保证整屏都是这个游戏、上层不叠任何其它窗口。默认开。
+    "ShowFirstGame": "1",
 }
 
 _CN = {
@@ -402,6 +412,8 @@ _CN = {
     "OneDragonTimeoutMin": "一条龙等待上限(分钟)",
     "WuwaGapSec": "关原神后宽限(秒)",
     "OkwwTimeoutMin": "ok-ww 等待上限(分钟)",
+    "KeepPrevGame": "接力时保留上一游戏进程(0/1)",
+    "ShowFirstGame": "首个游戏窗口独占全屏(0/1)",
 }
 
 
@@ -508,6 +520,18 @@ class Config(object):
     def kill_genshin(self):
         return str(self.get("KillGenshin")).strip() in ("1", "true", "True",
                                                         "yes")
+
+    @property
+    def keep_prev_game(self):
+        """接力时是否保留上一个游戏的进程（不主动关闭）。"""
+        return str(self.get("KeepPrevGame")).strip() in ("1", "true", "True",
+                                                         "yes")
+
+    @property
+    def show_first_game(self):
+        """首个游戏启动后是否把它独占全屏置顶显示。"""
+        return str(self.get("ShowFirstGame")).strip() in ("1", "true", "True",
+                                                          "yes")
 
     @property
     def okww_dir(self):
@@ -2259,6 +2283,51 @@ def restore_window(hwnd, foreground=False):
         return False
 
 
+def show_first_game_window(cfg, stage, emit=None, timeout=120):
+    """把首个游戏的窗口「独占全屏」置顶显示。
+
+    还原被最小化的窗口 → 最大化占满屏幕 → 强制置前 → 清掉其它窗口，
+    保证整屏都是这个游戏、上层不叠任何其它窗口（用户原话：
+    "整个屏幕都是这个游戏，无其他窗口出现在上层"）。
+
+    仅当 `cfg.show_first_game` 为真、且 `stage` 是首个阶段时由调度器调用。
+    游戏窗口可能要等几秒才出现（尤其是游戏由工具自己拉起的情况），
+    所以这里会轮询最多 `timeout` 秒直到窗口出现再最大化。
+
+    返回 True/False（是否成功把窗口置顶）。
+    """
+    emit = emit or (lambda m: None)
+    if not cfg.show_first_game:
+        return False
+    names = list(stage.get("game_procs") or ())
+    if not names:
+        return False
+    u = ctypes.windll.user32
+    t0 = time.time()
+    hw = 0
+    while time.time() - t0 < timeout:
+        hw = find_window_by_proc(names)
+        if hw:
+            break
+        time.sleep(3)
+    if not hw:
+        emit("（等待 %d 秒仍未找到「%s」窗口，跳过独占全屏）"
+             % (timeout, stage.get("label", "游戏")))
+        return False
+    try:
+        u.ShowWindow(hw, 9)                        # SW_RESTORE 还原
+        u.ShowWindow(hw, 3)                        # SW_MAXIMIZE 占满屏幕
+        _force_foreground(hw)                      # 强制置前
+        emit("已把「%s」窗口最大化并置顶（整屏独占）。"
+             % stage.get("label", "游戏"))
+    except Exception as exc:                       # noqa: BLE001
+        emit("（置顶游戏窗口失败：%s）" % exc)
+    # 清掉其它窗口（开始菜单浮层 + 别的 app），保证游戏不被遮盖；
+    # 内部会保留原神 / BetterGI 遮罩 / 任务栏，并把原神拉回最前。
+    minimize_other_windows(emit)
+    return True
+
+
 def _window_proc_name(hwnd):
     """取窗口所属进程的可执行文件名（小写）。失败返回空串。"""
     try:
@@ -3073,7 +3142,9 @@ def chain_to_wuwa(cfg, log_cb=None):
         emit("BetterGI 已自行退出。")
 
     # 2) 关原神（腾出显卡/内存给鸣潮）
-    if cfg.kill_genshin:
+    #    `KeepPrevGame` 是通用的「不杀上一游戏」总开关，优先级高于
+    #    旧版专用的 `KillGenshin` —— 打开了就一律保留上一个游戏。
+    if cfg.kill_genshin and not cfg.keep_prev_game:
         if proc_alive(GENSHIN_PROC):
             ok, msg = kill_proc(GENSHIN_PROC, emit)
             emit("关闭原神：%s" % msg)
@@ -3303,7 +3374,7 @@ def stage_argv(cfg, stage, exe):
     return [exe]
 
 
-def run_external_stage(cfg, stage, emit):
+def run_external_stage(cfg, stage, emit, is_first=False):
     """通用阶段：启动外部一条龙工具 → 等它跑完。返回 (ok, msg)。
 
     完成判定借鉴 OneDragon 官方「千机链」的做法：
@@ -3333,6 +3404,7 @@ def run_external_stage(cfg, stage, emit):
 
     boot = max(30, cfg.i("StageBootSec", 180))
     appear = False
+    shown = False
     t0 = time.time()
     while time.time() - t0 < boot:
         time.sleep(2)
@@ -3340,6 +3412,10 @@ def run_external_stage(cfg, stage, emit):
                 proc_alive(list(stage["game_procs"])):
             appear = True
             emit("进程已出现（%d 秒）" % int(time.time() - t0))
+            # 首个阶段：游戏窗口已出现，立刻把它独占全屏置顶
+            if is_first and not shown:
+                show_first_game_window(cfg, stage, emit)
+                shown = True
             break
         if int(time.time() - t0) % 20 < 2:
             emit("等待它启动…（已等 %d 秒）" % int(time.time() - t0))
@@ -3354,7 +3430,13 @@ def run_external_stage(cfg, stage, emit):
         time.sleep(5)
         alive_t = proc_alive(list(stage["procs"]))
         alive_g = proc_alive(list(stage["game_procs"]))
-        if appear and not alive_t and not alive_g:
+        # 开启 KeepPrevGame 时，游戏进程要保留 —— 工具退出即可判定跑完，
+        # 否则会一直等到超时（游戏不退出）。
+        if cfg.keep_prev_game:
+            done = bool(appear and not alive_t)
+        else:
+            done = bool(appear and not alive_t and not alive_g)
+        if done:
             cost = int(time.time() - t1)
             emit("进程已全部退出（用时 %d 分 %d 秒）—— 判定为跑完。"
                  % (cost // 60, cost % 60))
@@ -3373,16 +3455,31 @@ def cleanup_stage(cfg, stage, emit, gap=None):
 
     为什么必须清理：下一个游戏要抢显卡和内存，上一个不退会一起卡
     （千机链也是这么做的：组间清理进程 + 等 10 秒再进下一组）。
+
+    例外：开启 `KeepPrevGame` 时，**只清工具进程、保留游戏进程** ——
+    让上一个游戏继续在后台挂着，下一个游戏启动后它们可同时运行。
     """
-    for names, what in ((list(stage["procs"]), "工具"),
-                        (list(stage["game_procs"]), "游戏")):
-        safe = [n for n in names
-                if n.replace(".exe", "").lower() not in NEVER_KILL_PROCS]
-        if not safe:
-            continue
-        if proc_alive(safe):
-            _ok, msg = kill_proc(safe, emit)
-            emit("关闭%s进程：%s" % (what, msg))
+    # 工具进程：永远清掉（让上一个工具退出，释放它持有的锁 / 句柄 /
+    # 截屏设备，否则会卡住下一个工具）。
+    tool_safe = [n for n in list(stage["procs"])
+                 if n.replace(".exe", "").lower() not in NEVER_KILL_PROCS]
+    if tool_safe and proc_alive(tool_safe):
+        _ok, msg = kill_proc(tool_safe, emit)
+        emit("关闭工具进程：%s" % msg)
+
+    # 游戏进程：默认清掉腾资源；开启 KeepPrevGame 时保留，让它继续跑。
+    game_safe = [n for n in list(stage["game_procs"])
+                 if n.replace(".exe", "").lower() not in NEVER_KILL_PROCS]
+    if not cfg.keep_prev_game:
+        if game_safe and proc_alive(game_safe):
+            _ok, msg = kill_proc(game_safe, emit)
+            emit("关闭游戏进程：%s" % msg)
+    else:
+        if game_safe and proc_alive(game_safe):
+            emit("按设置保留上一游戏进程不关闭（%s）。"
+                 % "、".join(game_safe))
+        else:
+            emit("按设置保留上一游戏进程不关闭。")
     gap = max(0, cfg.i("WuwaGapSec", 20)) if gap is None else gap
     if gap:
         emit("等待 %d 秒，让显卡/内存释放干净…" % gap)
@@ -3420,19 +3517,23 @@ def stage_snapshot(cfg):
     return out
 
 
-def run_stage(sid, cfg, emit):
-    """执行一个游戏阶段。返回 (成功, 说明)。"""
+def run_stage(sid, cfg, emit, is_first=False):
+    """执行一个游戏阶段。返回 (成功, 说明)。
+
+    is_first=True 时（整个流水线第一个阶段），会在游戏窗口出现后把它
+    独占全屏置顶（受 `ShowFirstGame` 开关控制）。
+    """
     stage = STAGE_MAP.get(sid)
     if not stage:
         return False, "未知阶段 %s" % sid
     if sid == "genshin":
-        return _stage_genshin(cfg, emit)
+        return _stage_genshin(cfg, emit, is_first)
     if sid == "wuwa":
-        return _stage_wuwa(cfg, emit)
-    return run_external_stage(cfg, stage, emit)
+        return _stage_wuwa(cfg, emit, is_first)
+    return run_external_stage(cfg, stage, emit, is_first)
 
 
-def _stage_genshin(cfg, emit):
+def _stage_genshin(cfg, emit, is_first=False):
     """原神阶段：启动 BetterGI 一条龙，等它跑完。
 
     注意：这里**不再顺带接力鸣潮** —— 顺序由 `StageOrder` 决定，
@@ -3442,6 +3543,9 @@ def _stage_genshin(cfg, emit):
     emit("启动结果：%s" % msg)
     if not ok:
         return False, msg
+    # 首个阶段：原神此时已在运行，立刻把它独占全屏置顶
+    if is_first:
+        show_first_game_window(cfg, STAGE_MAP["genshin"], emit)
     emit("一条龙已启动，开始等它跑完…（上限 %d 分钟）"
          % cfg.i("OneDragonTimeoutMin", 300))
     reason, detail = wait_onedragon_done(cfg, emit)
@@ -3457,7 +3561,7 @@ def _stage_genshin(cfg, emit):
     return True, "已完成"
 
 
-def _stage_wuwa(cfg, emit):
+def _stage_wuwa(cfg, emit, is_first=False):
     """鸣潮阶段：交给 ok-ww（它会自己启动鸣潮并跑日常）。"""
     # ★ 权限闸门放最前面：**没权限就绝不去关任何游戏进程**，
     #   否则早上起来会看到"游戏被关了、鸣潮也没跑"。
@@ -3491,7 +3595,12 @@ def _stage_wuwa(cfg, emit):
         emit("鸣潮本来就在运行，先把它从最小化还原…")
         restore_window(hw, foreground=True)
 
-    return run_okww(cfg, emit)
+    ok, msg = run_okww(cfg, emit)
+    # 首个阶段：ok-ww 跑完后鸣潮已在运行，把它独占全屏置顶（如仍未出现
+    # 则 show_first_game_window 会轮询等待，最迟在超时前补上）
+    if is_first:
+        show_first_game_window(cfg, STAGE_MAP["wuwa"], emit)
+    return ok, msg
 
 
 # ---------------------------------------------------------------------------
@@ -3593,7 +3702,7 @@ def daily_mode(cfg, record_wake=False):
         emit("════════ 第 %d/%d 阶段：%s —— %s ════════"
              % (idx + 1, len(order), stage["label"], stage["tool"]))
         try:
-            sok, smsg = run_stage(sid, cfg, emit)
+            sok, smsg = run_stage(sid, cfg, emit, is_first=(idx == 0))
         except Exception as exc:  # noqa: BLE001
             sok, smsg = False, "阶段出错：%s" % exc
         emit("阶段结果：%s —— %s" % ("成功" if sok else "失败", smsg))
@@ -3639,6 +3748,9 @@ def onedragon_mode(cfg):
     emit("[唤醒取证] lastwake:\n%s" % last_wake_info())
     ok, msg = start_onedragon(cfg, emit, skip_window=True)
     emit("结果：%s" % msg)
+    # 首个（也是唯一）游戏：原神已在运行，把它独占全屏置顶
+    if ok and cfg.show_first_game:
+        show_first_game_window(cfg, STAGE_MAP["genshin"], emit)
     return 0 if ok else 1
 
 
